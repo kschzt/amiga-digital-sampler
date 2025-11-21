@@ -24,7 +24,7 @@ By combining modern digital filtering, proper anti-aliasing, stable clocking, an
 
 ### **Core Hardware**
 
-* **Raspberry Pi 4B** — performs DSP + SPI output
+* **Raspberry Pi 3A+ or newer** — performs DSP + SPI output
 * **Raspberry Pi Pico** — PIO playback engine
 * **HiFiBerry Digi+** — S/PDIF → I²S input frontend
 * **74HCT245** — 3.3V→5V level shifter for 8-bit parallel bus
@@ -59,7 +59,7 @@ S/PDIF → HiFiBerry Digi+ → I²S → Raspberry Pi → DSP → SPI → Pico �
 
 # Wiring Guide
 
-## Raspberry Pi 4B → Raspberry Pi Pico (SPI0)
+## Raspberry Pi → Raspberry Pi Pico (SPI0)
 
 | Pi Pin  | GPIO   | Function  | Pico Pin | Notes              |
 | ------- | ------ | --------- | -------- | ------------------ |
@@ -164,9 +164,3 @@ The Pi applies:
 5. Connect to Amiga parallel port
 6. Sample into ProTracker at A-3 (27.928kHz)
 7. Enjoy fully digital audio
-
----
-
-# Note
-
-* Pi 4B or Pi 5B required when using HiFiBerry Digi+ (Pi 3A+ cannot run SPI and Digi together)
