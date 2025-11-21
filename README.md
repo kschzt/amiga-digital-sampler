@@ -2,6 +2,8 @@
 
 A digital sampler for the Amiga that sends real-time audio from S/PDIF → Raspberry Pi → SPI → Raspberry Pi Pico PIO → 74HCT245 → Amiga Parallel Port, with a 100% digital path. 
 
+Status: currently building first version; untested
+
 It provides:
 
 * Real-time DSP (FIR LPF, DC-block, noise shaping, optional dither)
