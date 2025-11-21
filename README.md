@@ -1,6 +1,6 @@
 # Amiga Digital Sampler
 
-This project implements a pro-audio sampler that sends real-time audio from S/PDIF → Raspberry Pi → SPI → Raspberry Pi Pico PIO → 74HCT245 → Amiga Parallel Port, with a 100% digital path. 
+A digital sampler for the Amiga that sends real-time audio from S/PDIF → Raspberry Pi → SPI → Raspberry Pi Pico PIO → 74HCT245 → Amiga Parallel Port, with a 100% digital path. 
 
 It provides:
 
