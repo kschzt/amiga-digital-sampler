@@ -1,0 +1,4 @@
+.program sampleout
+pull block
+out pins, 8
+jmp 0
