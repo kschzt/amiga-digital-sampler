@@ -1,17 +1,14 @@
 CC=gcc
 CFLAGS=-O3 -march=native -Wall
-LIBS=-lasound -lm
+LIBS=-lasound -lm -lpthread
 
-all: sampler
+OBJS = main.o dsp.o audio.o spi.o ringbuf.o
 
-sampler: main.o dsp.o
-	$(CC) $(CFLAGS) -o sampler main.o dsp.o $(LIBS)
+sampler: $(OBJS)
+	$(CC) $(CFLAGS) -o sampler $(OBJS) $(LIBS)
 
-main.o: main.c dsp.h
-	$(CC) $(CFLAGS) -c main.c
-
-dsp.o: dsp.c dsp.h
-	$(CC) $(CFLAGS) -c dsp.c
+%.o: %.c
+	$(CC) $(CFLAGS) -c $<
 
 clean:
 	rm -f *.o sampler

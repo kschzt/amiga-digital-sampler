@@ -1,0 +1,16 @@
+.program spi_slave_rx
+
+.wrap_target
+start:
+    wait 0 gpio 17      ; Wait for CS low (gpio 17)
+loop:
+    set x, 7            ; 8 bits
+bitloop:
+    wait 1 gpio 18      ; Wait for SCK high (gpio 18)
+    in pins, 1          ; Sample MOSI (pin 16)
+    wait 0 gpio 18      ; Wait for SCK low
+    jmp x-- bitloop     ; Next bit
+    ; autopush after 8 bits
+    jmp pin start       ; If CS high, restart
+    jmp loop            ; Else next byte
+.wrap

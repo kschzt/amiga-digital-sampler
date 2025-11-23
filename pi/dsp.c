@@ -22,10 +22,18 @@ void dsp_init(dcblock_t *dc, fir_t *fir, nshaper_t *ns)
     dc->prev_output = 0.f;
 
     fir->pos = 0;
+    fir_gain = 0.f;
+
+    // Load coefficients (convert Q15 to float) and compute gain
     for (int i = 0; i < 15; i++) {
         fir->hist[i] = 0;
         fir_norm[i] = fir_coeffs[i] / 32768.0f;
         fir_gain += fir_norm[i];
+    }
+
+    // Normalize to unity gain
+    for (int i = 0; i < 15; i++) {
+        fir_norm[i] /= fir_gain;
     }
 
     ns->error = 0.f;
@@ -57,7 +65,7 @@ float dsp_fir(fir_t *st, float x)
     }
 
     if (++st->pos >= 15) st->pos = 0;
-    return acc;
+    return acc / 32768.0f;
 }
 
 // ------------------------
