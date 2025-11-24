@@ -8,7 +8,7 @@ Enables fully digital audio input to Amiga samplers using a Raspberry Pi for DSP
 
 ## Status
 
-Work in progress! Not quite yet functional end-to-end. I'm working out the final kinks. 
+Work in progress! Pi->Amiga and DSP is working (with test-ramp/tone), looking into ALSA
 
 ## Motivation
 
