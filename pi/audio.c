@@ -7,7 +7,7 @@
 #define ALSA_DEVICE "hw:0,0"
 #define ALSA_RATE   48000
 #define ALSA_CH     2
-#define ALSA_FORMAT SND_PCM_FORMAT_S32_LE
+#define ALSA_FORMAT SND_PCM_FORMAT_S24_LE
 
 static void *audio_thread(void *arg)
 {
@@ -20,11 +20,16 @@ static void *audio_thread(void *arg)
     dsp_init(&dc, &fir, &ns);
 
     snd_pcm_t *pcm = NULL;
-    int32_t alsa_frame[2];
+
+    #define ALSA_FRAMES 256
+    int32_t alsa_buf[ALSA_FRAMES * 2];  // stereo
 
     if (!tm->test_tone && !tm->test_ramp) {
-        snd_pcm_open(&pcm, ALSA_DEVICE, SND_PCM_STREAM_CAPTURE,
-                     SND_PCM_NONBLOCK);
+        int err = snd_pcm_open(&pcm, ALSA_DEVICE, SND_PCM_STREAM_CAPTURE, 0);
+        if (err < 0) {
+            fprintf(stderr, "Cannot open audio: %s\n", snd_strerror(err));
+            return NULL;
+        }
 
         snd_pcm_hw_params_t *p;
         snd_pcm_hw_params_alloca(&p);
@@ -42,62 +47,68 @@ static void *audio_thread(void *arg)
     float phase_inc = 2.f * M_PI * tm->test_freq / ALSA_RATE;
     uint32_t ds_acc = 0;
 
-    // For test mode timing
-    struct timespec next_sample_time;
-    clock_gettime(CLOCK_MONOTONIC, &next_sample_time);
-    const uint64_t sample_period_ns = 1000000000ULL / 48000; // ~20833ns per sample
-
     for (;;) {
-        float x;
-
-        /* --- INPUT SAMPLE @48k --- */
         if (tm->test_ramp || tm->test_tone) {
-            // Wait for next 48kHz sample time
-            clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next_sample_time, NULL);
-            
+            // ... keep existing test tone code ...
+            float x;
             if (tm->test_ramp) {
                 static uint8_t rv = 0;
                 x = (rv++ / 127.5f) - 1.f;
-            } else { // test_tone
+            } else {
                 x = sinf(phase) * 0.9f;
                 phase += phase_inc;
                 if (phase >= 2.f * M_PI) phase -= 2.f * M_PI;
             }
-            
-            // Schedule next sample
-            next_sample_time.tv_nsec += sample_period_ns;
-            if (next_sample_time.tv_nsec >= 1000000000) {
-                next_sample_time.tv_sec++;
-                next_sample_time.tv_nsec -= 1000000000;
+
+            x = dsp_dcblock(&dc, x);
+            x = dsp_fir(&fir, x);
+
+            ds_acc += cfg.target_rate;
+            if (ds_acc >= ALSA_RATE) {
+                ds_acc -= ALSA_RATE;
+                uint8_t q = dsp_quantize(&ns, x, cfg.dither);
+                ringbuf_push(rb, q);
             }
+
+            // Pace the test tone
+            struct timespec ts = { .tv_sec = 0, .tv_nsec = 20833 };
+            nanosleep(&ts, NULL);
         }
         else {
-            /* ALSA: read exactly 1 frame if available */
-            if (snd_pcm_readi(pcm, alsa_frame, 1) == 1) {
-                float L = alsa_frame[0] / 8388608.f;
-                float R = alsa_frame[1] / 8388608.f;
-                x = ((L + R) * 0.5f) * cfg.gain;
-            } else {
-                continue;   // no new ALSA sample this iteration
+            // Read a chunk of frames
+            int frames = snd_pcm_readi(pcm, alsa_buf, ALSA_FRAMES);
+
+            if (frames == -EPIPE) {
+                snd_pcm_prepare(pcm);
+                continue;
+            } else if (frames < 0) {
+                fprintf(stderr, "ALSA error: %s\n", snd_strerror(frames));
+                snd_pcm_prepare(pcm);
+                continue;
             }
-        }
 
-        /* --- DSP chain --- */
-        x = dsp_dcblock(&dc, x);
-        x = dsp_fir(&fir, x);
+            // Process each frame
+            for (int i = 0; i < frames; i++) {
+                float L = alsa_buf[i * 2] / 8388608.f;
+                float R = alsa_buf[i * 2 + 1] / 8388608.f;
+                float x = ((L + R) * 0.5f) * cfg.gain;
 
-        /* --- 48k -> target_rate downsample --- */
-        ds_acc += cfg.target_rate;
-        if (ds_acc >= ALSA_RATE) {
-            ds_acc -= ALSA_RATE;
+                x = dsp_dcblock(&dc, x);
+                x = dsp_fir(&fir, x);
 
-            uint8_t q = dsp_quantize(&ns, x, cfg.dither);
-            ringbuf_push(rb, q);
+                ds_acc += cfg.target_rate;
+                if (ds_acc >= ALSA_RATE) {
+                    ds_acc -= ALSA_RATE;
+                    uint8_t q = dsp_quantize(&ns, x, cfg.dither);
+                    ringbuf_push(rb, q);
+                }
+            }
         }
     }
 
     return NULL;
 }
+
 int audio_thread_create(pthread_t *th, audio_args_t *aa)
 {
     return pthread_create(th, NULL, audio_thread, aa);
