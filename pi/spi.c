@@ -10,7 +10,7 @@
 #include "ringbuf.h"
 
 #define SPI_DEV "/dev/spidev0.0"
-#define SPI_SPEED 8000000
+#define SPI_SPEED 500000
 
 // Convert ns
 static inline void ts_from_ns(struct timespec *ts, uint64_t ns)
