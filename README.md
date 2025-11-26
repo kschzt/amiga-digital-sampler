@@ -109,7 +109,8 @@ The only pins we should send current to are D0-D7 on the DB25.
 
 ## Acknowledgements
 
-Thanks to 8bitbubsy for helping to debug ProTracker sample rates.
+- Thanks to echolevel for the awesome Open Amiga Sampler, which made this project possible.
+- Thanks to 8bitbubsy for helping to debug ProTracker sample rates.
 
 ## License
 
