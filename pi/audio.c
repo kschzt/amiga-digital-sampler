@@ -16,8 +16,8 @@ static void *audio_thread(void *arg)
     dsp_config_t cfg = aa->cfg;
     testmode_t *tm = &aa->test;
 
-    dcblock_t dc; fir_t fir; nshaper_t ns;
-    dsp_init(&dc, &fir, &ns);
+    dcblock_t dc; nshaper_t ns;
+    dsp_init(&dc, &ns);
 
     snd_pcm_t *pcm = NULL;
 
@@ -40,6 +40,15 @@ static void *audio_thread(void *arg)
         snd_pcm_hw_params_set_rate(pcm, p, ALSA_RATE, 0);
 
         snd_pcm_hw_params(pcm, p);
+
+        // === DIAGNOSTIC: Check what ALSA actually gave us ===
+        snd_pcm_format_t actual_fmt;
+        unsigned int actual_rate;
+        snd_pcm_hw_params_get_format(p, &actual_fmt);
+        snd_pcm_hw_params_get_rate(p, &actual_rate, 0);
+        fprintf(stderr, "ALSA format: %d (wanted %d), rate: %u\n", 
+                actual_fmt, ALSA_FORMAT, actual_rate);
+
         snd_pcm_prepare(pcm);
     }
 
@@ -47,9 +56,15 @@ static void *audio_thread(void *arg)
     float phase_inc = 2.f * M_PI * tm->test_freq / ALSA_RATE;
     uint32_t ds_acc = 0;
 
+    // === DIAGNOSTIC: For printing raw samples ===
+    int dbg_count = 0;
+
+    // === DIAGNOSTIC: Uncomment to test hardware with known ramp ===
+    // static uint8_t test_ramp_val = 0;
+    // #define FORCE_RAMP_TEST
+
     for (;;) {
         if (tm->test_ramp || tm->test_tone) {
-            // ... keep existing test tone code ...
             float x;
             if (tm->test_ramp) {
                 static uint8_t rv = 0;
@@ -60,9 +75,6 @@ static void *audio_thread(void *arg)
                 if (phase >= 2.f * M_PI) phase -= 2.f * M_PI;
             }
 
-            x = dsp_dcblock(&dc, x);
-            x = dsp_fir(&fir, x);
-
             ds_acc += cfg.target_rate;
             if (ds_acc >= ALSA_RATE) {
                 ds_acc -= ALSA_RATE;
@@ -70,12 +82,10 @@ static void *audio_thread(void *arg)
                 ringbuf_push(rb, q);
             }
 
-            // Pace the test tone
             struct timespec ts = { .tv_sec = 0, .tv_nsec = 20833 };
             nanosleep(&ts, NULL);
         }
         else {
-            // Read a chunk of frames
             int frames = snd_pcm_readi(pcm, alsa_buf, ALSA_FRAMES);
 
             if (frames == -EPIPE) {
@@ -87,14 +97,25 @@ static void *audio_thread(void *arg)
                 continue;
             }
 
-            // Process each frame
+            // === DIAGNOSTIC: Print first few raw samples ===
+            if (dbg_count < 5 && frames > 0) {
+                fprintf(stderr, "raw[0]=0x%08X raw[1]=0x%08X\n", 
+                        alsa_buf[0], alsa_buf[1]);
+                dbg_count++;
+            }
+
             for (int i = 0; i < frames; i++) {
-                float L = alsa_buf[i * 2] / 8388608.f;
-                float R = alsa_buf[i * 2 + 1] / 8388608.f;
-                float x = ((L + R) * 0.5f) * cfg.gain;
+                int32_t rawL = alsa_buf[i * 2] & 0x00FFFFFF;
+                int32_t rawR = alsa_buf[i * 2 + 1] & 0x00FFFFFF;
+
+                if (rawL & 0x800000) rawL |= 0xFF000000;
+                if (rawR & 0x800000) rawR |= 0xFF000000;
+
+                float L = rawL / 8388608.0f;
+                float R = rawR / 8388608.0f;
+                float x = (L + R) * 0.5f * cfg.gain * 2.0f;
 
                 x = dsp_dcblock(&dc, x);
-                x = dsp_fir(&fir, x);
 
                 ds_acc += cfg.target_rate;
                 if (ds_acc >= ALSA_RATE) {

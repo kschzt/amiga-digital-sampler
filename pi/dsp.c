@@ -2,100 +2,67 @@
 #include <stdlib.h>
 #include <math.h>
 
-//
-// FIR coefficients (14 kHz LPF @ 48 kHz)
-// scaled to float [-1,1]
-//
-static const float fir_coeffs[15] = {
-    512,  866, 1543, 2517, 3704,
-    4961, 6130, 7042, 7540,
-    7540, 7042, 6130, 4961,
-    3704, 2517
-};
+// Fast xorshift RNG for dither
+static uint32_t rng_state = 0x12345678;
 
-static float fir_norm[15];
-static float fir_gain = 0.0f;
+static inline float fast_dither(void) {
+    rng_state ^= rng_state << 13;
+    rng_state ^= rng_state >> 17;
+    rng_state ^= rng_state << 5;
+    float r1 = (float)(rng_state & 0xFFFF) / 65536.0f;
+    rng_state ^= rng_state << 13;
+    rng_state ^= rng_state >> 17;
+    rng_state ^= rng_state << 5;
+    float r2 = (float)(rng_state & 0xFFFF) / 65536.0f;
+    return r1 - r2;  // TPDF: triangular distribution
+}
 
-void dsp_init(dcblock_t *dc, fir_t *fir, nshaper_t *ns)
+void dsp_init(dcblock_t *dc, nshaper_t *ns)
 {
-    dc->prev_input  = 0.f;
-    dc->prev_output = 0.f;
+    dc->prev_in = 0.0f;
+    dc->prev_out = 0.0f;
 
-    fir->pos = 0;
-    fir_gain = 0.f;
-
-    // Load coefficients (convert Q15 to float) and compute gain
-    for (int i = 0; i < 15; i++) {
-        fir->hist[i] = 0;
-        fir_norm[i] = fir_coeffs[i] / 32768.0f;
-        fir_gain += fir_norm[i];
-    }
-
-    // Normalize to unity gain
-    for (int i = 0; i < 15; i++) {
-        fir_norm[i] /= fir_gain;
-    }
-
-    ns->error = 0.f;
+    ns->e1 = 0.0f;
+    ns->e2 = 0.0f;
 }
 
 // ------------------------
-// DC BLOCK
+// DC Blocker - highpass at ~5Hz
 // ------------------------
 float dsp_dcblock(dcblock_t *st, float x)
 {
-    float y = x - st->prev_input + 0.995f * st->prev_output;
-    st->prev_input = x;
-    st->prev_output = y;
+    // y[n] = x[n] - x[n-1] + R * y[n-1], R ~= 0.995 for ~5Hz @ 48kHz
+    float y = x - st->prev_in + 0.995f * st->prev_out;
+    st->prev_in = x;
+    st->prev_out = y;
     return y;
 }
 
 // ------------------------
-// FIR LPF
+// Second-order noise-shaped 8-bit quantizer
 // ------------------------
-float dsp_fir(fir_t *st, float x)
+uint8_t dsp_quantize(nshaper_t *st, float x, bool dither)
 {
-    st->hist[st->pos] = (int32_t)(x * 32768.0f);
-    float acc = 0.f;
-    int i = st->pos;
+    // Second-order noise shaping
+    float shaped = x + 1.6f * st->e1 - 0.65f * st->e2;
 
-    for (int t = 0; t < 15; t++) {
-        acc += fir_norm[t] * (float)st->hist[i];
-        if (--i < 0) i = 14;
-    }
+    // TPDF dither
+    if (dither)
+        shaped += fast_dither() * (1.0f / 256.0f);
 
-    if (++st->pos >= 15) st->pos = 0;
-    return acc / 32768.0f;
-}
+    // Soft clamp
+    if (shaped > 0.99f) shaped = 0.99f;
+    if (shaped < -0.99f) shaped = -0.99f;
 
-// ------------------------
-// Noise-shaped 8-bit quantizer
-// ------------------------
-uint8_t dsp_quantize(
-    nshaper_t *st,
-    float x,
-    bool dither
-) {
-    // error feedback (noise shaping)
-    float s = x + st->error;
+    // Quantize to signed 8-bit
+    int q = (int)roundf(shaped * 127.0f);
 
-    // optional TPDF dither (~0.5 LSB)
-    if (dither) {
-        float r = ((float)rand() / RAND_MAX) - ((float)rand() / RAND_MAX);
-        s += r * (1.f / 256.f);
-    }
+    // Error feedback
+    float quantized = (float)q / 127.0f;
+    st->e2 = st->e1;
+    st->e1 = shaped - quantized;
 
-    // clamp -1..+1
-    if (s > 1.f) s = 1.f;
-    if (s < -1.f) s = -1.f;
-
-    // convert to signed 8-bit -128..127
-    int q = (int)(s * 127.f);
-
-    // update error
-    st->error = s - ((float)q / 127.f);
-
-    // convert signed → unsigned 0..255
+    // Convert to unsigned
     q += 128;
     if (q < 0) q = 0;
     if (q > 255) q = 255;

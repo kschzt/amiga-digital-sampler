@@ -4,11 +4,11 @@ S/PDIF to parallel port sampler interface for Amiga.
 
 ## Overview
 
-Enables fully digital audio input to Amiga sampler software using a Raspberry Pi for DSP and a Raspberry Pi Pico for timing control.
+Enables fully digital audio input to Amiga sampler software via Raspberry Pi and Pico.
 
 ## Status
 
-0.9 - Pipeline is working, DSP needs some tuning.
+1.0 - Everything is working and sounds great.
 
 ## Motivation
 
@@ -91,7 +91,6 @@ make
 
 ### Signal Path
 - S/PDIF input at 48kHz
-- 14kHz FIR low-pass filter
 - Noise-shaped 8-bit quantization  
 - Downsample to 28.15kHz
 - SPI transfer to Pico

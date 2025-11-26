@@ -66,7 +66,7 @@ static void *spi_thread(void *arg)
         } else {
             // No data available - wait briefly
             // This prevents spinning when ringbuf is empty
-            //usleep(500);  // 0.5ms
+            usleep(100);
         }
     }
 

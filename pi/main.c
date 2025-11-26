@@ -24,11 +24,12 @@ int main(int argc, char **argv)
     dsp_config_t cfg = {
         .dither = false,
         .gain = 1.0f,
-        // ProTracker A-3 sampling: period 127÷2=63.5→63, PAL 3546895Hz÷(63×2)=28150Hz
-        .target_rate = 28150,
-        //.target_rate = 27928,
-        //.target_rate = 48000, 
-        .fir_taps = 13
+        // ProTracker A-3 sampling: period 127÷2=63.5→63, PAL 
+        // samplingRate = 3546895 / (floor[period/2]*2)
+        // A-3 period = 127, floor[127/2] = 63, 63 * 2 = 126
+        // 3546895 / 126 = 28149.9603174
+        .target_rate = 28149.96,
+        //.target_rate = 28150,
     };
 
     testmode_t tm = {0};
