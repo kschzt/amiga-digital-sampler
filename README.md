@@ -51,7 +51,7 @@ GND                →  GND
 ```
 74HCT245 Pin 20 (VCC)  →  5V
 74HCT245 Pin 10 (GND)  →  GND
-74HCT245 Pin 1  (DIR)  →  GND
+74HCT245 Pin 1  (DIR)  →  5V
 74HCT245 Pin 19 (OE)   →  Pico GP11
 0.1µF capacitor between pins 20 and 10
 
