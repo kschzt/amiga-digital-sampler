@@ -113,7 +113,7 @@ static void *audio_thread(void *arg)
 
                 float L = rawL / 8388608.0f;
                 float R = rawR / 8388608.0f;
-                float x = (L + R) * 0.5f * cfg.gain * 2.0f;
+                float x = (L + R) * 0.5f * cfg.gain;
 
                 x = dsp_dcblock(&dc, x);
 
