@@ -42,6 +42,12 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "--gain") && i+1 < argc)
             cfg.gain = atof(argv[++i]);
 
+        else if (!strcmp(argv[i], "--compress"))
+            cfg.compress = true;
+
+        else if (!strcmp(argv[i], "--saturate"))
+            cfg.saturate = true;
+
         else if (!strcmp(argv[i], "--rate") && i+1 < argc)
             cfg.target_rate = atoi(argv[++i]);
 
