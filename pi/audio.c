@@ -16,7 +16,11 @@ static void *audio_thread(void *arg)
     dsp_config_t cfg = aa->cfg;
     testmode_t *tm = &aa->test;
 
-    dcblock_t dc; fir_t fir; postfir_t postfir; nshaper_t ns;
+    dcblock_t dc;
+    fir_t fir;
+    postfir_t postfir;
+    nshaper_t ns;
+
     dsp_init(&dc, &fir, &postfir, &ns);
 
     snd_pcm_t *pcm = NULL;
@@ -24,6 +28,7 @@ static void *audio_thread(void *arg)
     #define ALSA_FRAMES 256
     int32_t alsa_buf[ALSA_FRAMES * 2];
 
+    // Open ALSA unless test modes
     if (!tm->test_tone && !tm->test_ramp) {
         int err = snd_pcm_open(&pcm, ALSA_DEVICE, SND_PCM_STREAM_CAPTURE, 0);
         if (err < 0) {
@@ -48,31 +53,60 @@ static void *audio_thread(void *arg)
     float ds_acc = 0.0f;
 
     for (;;) {
+        // ===============================================================
+        // Test tone / ramp path
+        // ===============================================================
         if (tm->test_ramp || tm->test_tone) {
             float x;
+
             if (tm->test_ramp) {
                 static uint8_t rv = 0;
                 x = (rv++ / 127.5f) - 1.f;
             } else {
                 x = sinf(phase) * 0.9f;
                 phase += phase_inc;
-                if (phase >= 2.f * M_PI) phase -= 2.f * M_PI;
+                if (phase >= 2.f * M_PI)
+                    phase -= 2.f * M_PI;
             }
 
-            // Process through oversampled chain
-            float q_over = dsp_quantize_oversample(&ns, x, cfg.dither);
-            float q_filtered = dsp_postfir(&postfir, q_over);
+            // --- Mandatory DC-block
+            x = dsp_dcblock(&dc, x);
 
+            // --- Optional pre-FIR
+            if (cfg.filter)
+                x = dsp_fir(&fir, x);
+
+            // --- Optional compressor
+            if (cfg.compress)
+                x = dsp_compress(&ns, x);
+
+            // --- Optional saturator
+            if (cfg.saturate)
+                x = dsp_saturate(x);
+
+            // --- Oversampled quantizer (always runs)
+            float q_over = dsp_quantize_oversample(&ns, x, cfg.shape, cfg.dither);
+
+            // --- Optional post-FIR
+            float q_filtered = cfg.filter ? dsp_postfir(&postfir, q_over)
+                                          : q_over;
+
+            // --- Decimation
             ds_acc += cfg.target_rate;
             if (ds_acc >= (float)ALSA_RATE) {
                 ds_acc -= (float)ALSA_RATE;
-                uint8_t q = dsp_quantize_final(&ns, q_filtered, false);
+                uint8_t q = dsp_quantize_final(&ns, q_filtered, cfg.shape);
                 ringbuf_push(rb, q);
             }
 
+            // Maintain approximate 48 kHz loop timing
             struct timespec ts = { .tv_sec = 0, .tv_nsec = 20833 };
             nanosleep(&ts, NULL);
         }
+
+        // ===============================================================
+        // ALSA capture path
+        // ===============================================================
         else {
             int frames = snd_pcm_readi(pcm, alsa_buf, ALSA_FRAMES);
 
@@ -94,26 +128,37 @@ static void *audio_thread(void *arg)
 
                 float L = rawL / 8388608.0f;
                 float R = rawR / 8388608.0f;
+
                 float x = (L + R) * 0.5f * cfg.gain;
 
-                // Pre-processing at 48kHz
+                // --- Mandatory DC-block
                 x = dsp_dcblock(&dc, x);
-                x = dsp_fir(&fir, x);
-                if (cfg.compress) x = dsp_compress(&ns, x);
-                if (cfg.saturate) x = dsp_saturate(x);
 
-                // Quantize at 48kHz (aggressive shaping, noise pushed to 16-24kHz)
-                float q_over = dsp_quantize_oversample(&ns, x, cfg.dither);
+                // --- Optional pre-FIR
+                if (cfg.filter)
+                    x = dsp_fir(&fir, x);
 
-                // Filter removes HF noise before decimation
-                float q_filtered = dsp_postfir(&postfir, q_over);
+                // --- Optional compressor
+                if (cfg.compress)
+                    x = dsp_compress(&ns, x);
 
-                // Decimate to 28kHz
+                // --- Optional saturator
+                if (cfg.saturate)
+                    x = dsp_saturate(x);
+
+                // --- Oversampled quantizer (always runs)
+                float q_over = dsp_quantize_oversample(&ns, x, cfg.shape, cfg.dither);
+
+                // --- Optional post-FIR
+                float q_filtered = cfg.filter ? dsp_postfir(&postfir, q_over)
+                                              : q_over;
+
+                // --- Decimate 48k → target_rate (~28k)
                 ds_acc += cfg.target_rate;
                 if (ds_acc >= (float)ALSA_RATE) {
                     ds_acc -= (float)ALSA_RATE;
-                    // Final gentle quantization
-                    uint8_t q = dsp_quantize_final(&ns, q_filtered, false);
+
+                    uint8_t q = dsp_quantize_final(&ns, q_filtered, cfg.shape);
                     ringbuf_push(rb, q);
                 }
             }

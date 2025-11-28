@@ -4,8 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#define FIR_TAPS 21
-#define POST_FIR_TAPS 15
+#define FIR_TAPS 57
+#define POST_FIR_TAPS 57
 
 typedef struct {
     float prev_in;
@@ -23,14 +23,16 @@ typedef struct {
 } postfir_t;
 
 typedef struct {
-    float e1, e2, e3;      // oversampled quantizer errors
-    float e1_out, e2_out;  // output quantizer errors
-    float dither_hp;       // HP dither state
-    float comp_env;        // compressor envelope
+    float e1, e2, e3;       // oversample quantizer errors
+    float e1_out, e2_out;   // final quantizer errors
+    float dither_hp;        // HP dither state
+    float comp_env;         // compressor env follower
 } nshaper_t;
 
 typedef struct {
-    bool dither;
+    bool filter;       // pre-FIR + post-FIR
+    bool shape;        // enable noise shaping in both quantizers
+    bool dither;       // HP-TPDF in oversample quantizer
     bool compress;
     bool saturate;
     float gain;
@@ -38,12 +40,20 @@ typedef struct {
 } dsp_config_t;
 
 void dsp_init(dcblock_t *dc, fir_t *fir, postfir_t *postfir, nshaper_t *ns);
+
 float dsp_dcblock(dcblock_t *st, float x);
 float dsp_fir(fir_t *st, float x);
 float dsp_postfir(postfir_t *st, float x);
+
 float dsp_compress(nshaper_t *st, float x);
 float dsp_saturate(float x);
-float dsp_quantize_oversample(nshaper_t *st, float x, bool dither);
-uint8_t dsp_quantize_final(nshaper_t *st, float x, bool dither);
+
+// oversample quantizer: runs at 48k, float output (filtered -> decimated)
+float dsp_quantize_oversample(nshaper_t *st, float x,
+                              bool shape, bool dither);
+
+// final 8-bit quantizer at target_rate
+uint8_t dsp_quantize_final(nshaper_t *st, float x, bool shape);
 
 #endif
+
