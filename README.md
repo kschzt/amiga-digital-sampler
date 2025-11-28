@@ -8,7 +8,7 @@ Enables fully digital audio input to Amiga sampler software via Raspberry Pi and
 
 ## Status
 
-1.0 - Everything is working and sounds great.
+1.1 - Sounds great with improved DSP (see below)
 
 ## Motivation
 
@@ -91,8 +91,13 @@ make
 
 ### Signal Path
 - S/PDIF input at 48kHz
-- Noise-shaped 8-bit quantization  
-- Downsample to 28.15kHz
+- DC blocking filter
+- Minimum-phase FIR lowpass (14kHz cutoff)
+- Optional soft compression and saturation
+- 3rd-order noise-shaped quantization at 48kHz (pushes noise to 16-24kHz)
+- Post-quantization FIR lowpass (14kHz cutoff, removes shaped HF noise)
+- Decimation to 28.15kHz
+- 2nd-order noise-shaped final quantization to 8-bit
 - SPI transfer to Pico
 - STROBE-synchronized parallel output
 
