@@ -10,6 +10,8 @@ Enables fully digital audio input to Amiga sampler software via Raspberry Pi and
 
 1.3 – New DSP engine, real-time UI, presets, shaping, filtering, compression, saturation, and dither
 
+![](ui.png)
+
 The sampler has a terminal UI with:
 - real-time VU / peak meters
 - clip detection
