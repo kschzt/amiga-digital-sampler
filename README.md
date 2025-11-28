@@ -8,11 +8,43 @@ Enables fully digital audio input to Amiga sampler software via Raspberry Pi and
 
 ## Status
 
-1.1 - Sounds great with improved DSP (see below)
+1.3 – New DSP engine, real-time UI, presets, shaping, filtering, compression, saturation, and dither
+
+The sampler has a terminal UI with:
+- real-time VU / peak meters
+- clip detection
+- DSP load meter
+- quantizer noise meter
+- DC offset monitor
+- runtime DSP toggles
+- eight presets
+
+The sampler supports multiple DSP modes suitable for different content types:
+
+- **Raw / punchy**: filter off, shaping off  
+- **Clean / pads**: shaping on (auto-filter on)
+- **Bright transients / snares**: filter off, shaping off
+- **Lo-fi / crunchy**: shaping on, filter off (intentional aliasing)
 
 ## Motivation
 
-Traditional analog Amiga parallel-port samplers are noisy, have DC offsets and dynamics issues. I grew frustrated trying to make one sound clean, so I decided to build a modern digital one instead. This provides a fully digital path from S/PDIF to the parallel port and into eg. ProTracker. 
+Traditional analog Amiga parallel-port samplers are noisy, have DC offsets, and dynamics issues.  
+Rather than fight the hardware, this project implements a **fully digital** sampler:
+
+S/PDIF → Raspberry Pi → DSP → Pico → Amiga DB25
+
+No noise, no DC offsets, and precise sample rate control.
+
+### UI Display
+
+The UI includes:
+
+* **VU meter** (grey → green → yellow → red)
+* **Peak meter**
+* **Clip indicator & event counter**
+* **DSP load** (real-time load)
+* **Quantizer noise (oversampled quantizer error energy)**
+* **DC offset**
 
 ## Hardware
 
@@ -70,7 +102,44 @@ GND → DB25 Pins 18-25 (any or all)
 ```bash
 cd pi
 make
-./sampler  # or with --test-tone or --test-ramp
+./sampler
+````
+
+Use the keyboard to enable DSP sections or change presets (1-8).
+
+### Runtime Controls (Keyboard)
+
+**Presets (1–8):**
+
+* Raw
+* Raw + Saturation
+* Filter Only
+* Shaper
+* Shaper + Dither
+* Dirty LoFi
+* Comp + Sat
+* Clean + Compressor
+
+**DSP Toggles:**
+
+```
+f  = toggle filter
+s  = toggle shaper
+d  = toggle dither
+c  = toggle compressor
+t  = toggle saturator
+x  = reset peak + clip counters
+q  = quit
+```
+
+### Command-line Options
+
+```
+--gain X       Input gain (default 1.0)
+--rate Hz      Target sample rate (default 28149.96)
+--test-tone    Generate sine wave
+--tone-freq Hz Frequency of sine (default 1000 Hz)
+--test-ramp    Generate test ramp
 ```
 
 ### Pico
@@ -84,33 +153,62 @@ make
 
 ## ProTracker Setup
 
-1. Set sample rate to A-3
-2. After sampling, set finetune to +1 for correct playback
+1. Set sampling note to **A-3**
+2. After sampling, set **Finetune +1** for exact pitch
+
+This matches the Amiga's 28149.96 Hz sampling mode for PT A-3.
 
 ## Technical Details
 
-### Signal Path
-- S/PDIF input at 48kHz
-- DC blocking filter
-- Minimum-phase FIR lowpass (14kHz cutoff)
-- Optional soft compression and saturation
-- 3rd-order noise-shaped quantization at 48kHz (pushes noise to 16-24kHz)
-- Post-quantization FIR lowpass (14kHz cutoff, removes shaped HF noise)
-- Decimation to 28.15kHz
-- 2nd-order noise-shaped final quantization to 8-bit
-- SPI transfer to Pico
-- STROBE-synchronized parallel output
+### DSP Signal Path (with options)
+
+```
+48kHz S/PDIF input
+↓
+DC-block (always)
+↓
+Pre-FIR LPF (optional: filter)
+↓
+Compressor (optional)
+↓
+Saturator (optional)
+↓
+Oversample quantizer at 48kHz (always)
+  • 3rd-order shaping (optional)
+  • HP-TPDF dither (optional)
+↓
+Post-FIR LPF (optional: filter)
+↓
+Decimation to ~28.15kHz (always)
+↓
+Final 8-bit quantizer (always)
+  • 2nd-order shaping (optional)
+↓
+SPI burst output → Pico
+↓
+PIO-driven parallel bus → Amiga
+```
+
+### Notes on DSP Behavior
+
+* **Oversampling is always active**, ensuring stable, artifact-free decimation
+* **Shaping automatically enables filtering** when enabled via preset
+* Disabling filters is ideal for snares/kicks
+* Enabling shaping + filtering is ideal for pads/melodic sounds
+* Shaping without filtering produces aliasing (intentional LoFi mode)
+* Toggle DSP sections on/off in UI and monitor DSP state
 
 ### Timing
-- On Amiga STROBE at approx. 28150Hz, we post the next sample onto the DB25 pins (like other samplers)
-- Pico PIO handles cycle-accurate output
-- 8KB ring buffer for jitter absorption
+
+* Amiga STROBE ≈ **28149.96 Hz**
+* Pico latches the sample exactly on each STROBE edge
+* Pi → Pico SPI transfer uses small bursts to minimize latency
+* 8KB ringbuffer smooths jitter
 
 ## Warning
 
-Be careful, please don't break your Amiga!
-Please make sure all the components (including Amiga) share ground, and **make sure** your wiring doesn't send current into the wrong place.
-The only pins we should send current to are D0-D7 on the DB25. 
+Be careful, don't break your Amiga! Check wiring twice. Ensure common ground.
+Only drive DB25 **D0–D7** pins — nothing else.
 
 ## Acknowledgements
 
