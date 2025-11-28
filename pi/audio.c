@@ -16,13 +16,13 @@ static void *audio_thread(void *arg)
     dsp_config_t cfg = aa->cfg;
     testmode_t *tm = &aa->test;
 
-    dcblock_t dc; fir_t fir; postfir_t postfir; nshaper_t ns;
-    dsp_init(&dc, &fir, &postfir, &ns);
+    dcblock_t dc; nshaper_t ns;
+    dsp_init(&dc, &ns);
 
     snd_pcm_t *pcm = NULL;
 
     #define ALSA_FRAMES 256
-    int32_t alsa_buf[ALSA_FRAMES * 2];
+    int32_t alsa_buf[ALSA_FRAMES * 2];  // stereo
 
     if (!tm->test_tone && !tm->test_ramp) {
         int err = snd_pcm_open(&pcm, ALSA_DEVICE, SND_PCM_STREAM_CAPTURE, 0);
@@ -40,12 +40,28 @@ static void *audio_thread(void *arg)
         snd_pcm_hw_params_set_rate(pcm, p, ALSA_RATE, 0);
 
         snd_pcm_hw_params(pcm, p);
+
+        // === DIAGNOSTIC: Check what ALSA actually gave us ===
+        snd_pcm_format_t actual_fmt;
+        unsigned int actual_rate;
+        snd_pcm_hw_params_get_format(p, &actual_fmt);
+        snd_pcm_hw_params_get_rate(p, &actual_rate, 0);
+        fprintf(stderr, "ALSA format: %d (wanted %d), rate: %u\n", 
+                actual_fmt, ALSA_FORMAT, actual_rate);
+
         snd_pcm_prepare(pcm);
     }
 
     float phase = 0.f;
     float phase_inc = 2.f * M_PI * tm->test_freq / ALSA_RATE;
-    float ds_acc = 0.0f;
+    uint32_t ds_acc = 0;
+
+    // === DIAGNOSTIC: For printing raw samples ===
+    int dbg_count = 0;
+
+    // === DIAGNOSTIC: Uncomment to test hardware with known ramp ===
+    // static uint8_t test_ramp_val = 0;
+    // #define FORCE_RAMP_TEST
 
     for (;;) {
         if (tm->test_ramp || tm->test_tone) {
@@ -59,14 +75,10 @@ static void *audio_thread(void *arg)
                 if (phase >= 2.f * M_PI) phase -= 2.f * M_PI;
             }
 
-            // Process through oversampled chain
-            float q_over = dsp_quantize_oversample(&ns, x, cfg.dither);
-            float q_filtered = dsp_postfir(&postfir, q_over);
-
             ds_acc += cfg.target_rate;
-            if (ds_acc >= (float)ALSA_RATE) {
-                ds_acc -= (float)ALSA_RATE;
-                uint8_t q = dsp_quantize_final(&ns, q_filtered, false);
+            if (ds_acc >= ALSA_RATE) {
+                ds_acc -= ALSA_RATE;
+                uint8_t q = dsp_quantize(&ns, x, cfg.dither);
                 ringbuf_push(rb, q);
             }
 
@@ -85,6 +97,13 @@ static void *audio_thread(void *arg)
                 continue;
             }
 
+            // === DIAGNOSTIC: Print first few raw samples ===
+            if (dbg_count < 5 && frames > 0) {
+                fprintf(stderr, "raw[0]=0x%08X raw[1]=0x%08X\n", 
+                        alsa_buf[0], alsa_buf[1]);
+                dbg_count++;
+            }
+
             for (int i = 0; i < frames; i++) {
                 int32_t rawL = alsa_buf[i * 2] & 0x00FFFFFF;
                 int32_t rawR = alsa_buf[i * 2 + 1] & 0x00FFFFFF;
@@ -96,24 +115,12 @@ static void *audio_thread(void *arg)
                 float R = rawR / 8388608.0f;
                 float x = (L + R) * 0.5f * cfg.gain;
 
-                // Pre-processing at 48kHz
                 x = dsp_dcblock(&dc, x);
-                x = dsp_fir(&fir, x);
-                if (cfg.compress) x = dsp_compress(&ns, x);
-                if (cfg.saturate) x = dsp_saturate(x);
 
-                // Quantize at 48kHz (aggressive shaping, noise pushed to 16-24kHz)
-                float q_over = dsp_quantize_oversample(&ns, x, cfg.dither);
-
-                // Filter removes HF noise before decimation
-                float q_filtered = dsp_postfir(&postfir, q_over);
-
-                // Decimate to 28kHz
                 ds_acc += cfg.target_rate;
-                if (ds_acc >= (float)ALSA_RATE) {
-                    ds_acc -= (float)ALSA_RATE;
-                    // Final gentle quantization
-                    uint8_t q = dsp_quantize_final(&ns, q_filtered, false);
+                if (ds_acc >= ALSA_RATE) {
+                    ds_acc -= ALSA_RATE;
+                    uint8_t q = dsp_quantize(&ns, x, cfg.dither);
                     ringbuf_push(rb, q);
                 }
             }
