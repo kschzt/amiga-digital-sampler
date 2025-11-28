@@ -13,10 +13,10 @@ static const float fir_coeffs[FIR_TAPS] = {
 // Post-quantization FIR, 13kHz cutoff @ 48kHz
 // Removes shaped noise above Nyquist before decimation
 static const float post_fir_coeffs[POST_FIR_TAPS] = {
-    0.012f, 0.025f, 0.050f, 0.080f, 0.110f,
-    0.135f, 0.150f, 0.156f,  // center
-    0.150f, 0.135f, 0.110f, 0.080f, 0.050f,
-    0.025f, 0.012f
+    0.009f, 0.020f, 0.039f, 0.063f, 0.086f,
+    0.105f, 0.117f, 0.122f,  // center
+    0.117f, 0.105f, 0.086f, 0.063f, 0.039f,
+    0.020f, 0.009f
 };
 
 // Fast xorshift RNG
