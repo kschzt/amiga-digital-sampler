@@ -1,10 +1,15 @@
 # Amiga Digital Sampler
 
-S/PDIF to parallel port sampler interface for Amiga.
+S/PDIF to parallel-port sampler interface for Amiga.
 
 ## Overview
 
-Enables fully digital audio input to Amiga sampler software via Raspberry Pi and Pico.
+This project provides fully **digital** audio sampling for the Amiga using:
+- Raspberry Pi for S/PDIF capture and DSP
+- Raspberry Pi Pico for cycle-accurate parallel output
+- Amiga sampling software (e.g., ProTracker)
+
+The result is a modern, clean, high-quality digital sampler that plugs directly into the Amiga’s parallel port.
 
 ## Status
 
@@ -51,16 +56,17 @@ The UI includes:
 ## Hardware
 
 ### Required Components
-- Raspberry Pi 3A+ or 4
-- HiFiBerry Digi+ I/O
-- Raspberry Pi Pico
-- 74HCT245 octal buffer
-- 74LVX14 Schmitt trigger inverter
-- DB25 male connector
-- 0.1µF ceramic capacitors (3x)
-  - 1x across breadboard power rails
-  - 1x for 74HCT245 decoupling
-  - 1x for 74LVX14 decoupling
+
+- Raspberry Pi 3A+ or 4  
+- HiFiBerry Digi+ I/O  
+- Raspberry Pi Pico  
+- 74HCT245 octal buffer  
+- 74LVX14 Schmitt trigger inverter  
+- DB25 male connector  
+- 0.1µF ceramic capacitors (3×)  
+  - Rails
+  - 74HCT245 decoupling  
+  - 74LVX14 decoupling
 
 ### Connections
 
@@ -72,35 +78,31 @@ Pi GPIO 8  (CE0)   →  Pico GP17
 GND                →  GND
 ```
 
-#### STROBE Signal (74LVX14)
+#### STROBE (from Amiga → Pico via 74LVX14)
 ```
-74LVX14 Pin 14 (VCC)  →  3.3V
-74LVX14 Pin 7  (GND)  →  GND
-74LVX14 Pin 1  (IN)   →  DB25 Pin 1 (STROBE)
-74LVX14 Pin 2  (OUT)  →  Pico GP10
-0.1µF capacitor between pins 14 and 7
-```
-
-#### Data Buffer (74HCT245)
-```
-74HCT245 Pin 20 (VCC)  →  5V
-74HCT245 Pin 10 (GND)  →  GND
-74HCT245 Pin 1  (DIR)  →  5V
-74HCT245 Pin 19 (OE)   →  Pico GP11
-0.1µF capacitor between pins 20 and 10
-
-Pico GP2-9 →  74HCT245 Pins 2-9 (A1-A8)
-
-74HCT245 Pins 18-11 (B1-B8)  →  DB25 Pins 2-9
-
-GND → DB25 Pins 18-25 (any or all)
+74LVX14 Pin 1  IN   →  DB25 Pin 1 (STROBE)
+74LVX14 Pin 2  OUT  →  Pico GP10
+Pin 14 → 3.3V
+Pin 7  → GND
+0.1µF across VCC/GND
 ```
 
-**Make sure all devices including Amiga share ground**.
+#### Data Buffer (Pico → Amiga via 74HCT245)
+```
+74HCT245 Pins 2–9   ←  Pico GP2–9
+74HCT245 Pins 11–18 →  DB25 Pins 2–9
+DIR → 5V
+OE  → Pico GP11
+VCC → 5V, GND → GND
+0.1µF across VCC/GND
+````
+
+**IMPORTANT:** All devices including the Amiga must share ground.
 
 ## Software
 
 ### Raspberry Pi
+
 ```bash
 cd pi
 make
@@ -145,12 +147,13 @@ q  = quit
 ```
 
 ### Pico
+
 ```bash
 cd pico
 mkdir build && cd build
 cmake ..
 make
-# Copy pico_amiga_sampler.uf2 to Pico in BOOTSEL mode
+# Copy pico_amiga_sampler.uf2 to the Pico in BOOTSEL mode
 ```
 
 ## ProTracker Setup
@@ -214,9 +217,10 @@ Only drive DB25 **D0–D7** pins — nothing else.
 
 ## Acknowledgements
 
-- Thanks to echolevel for the awesome Open Amiga Sampler, which made this project possible.
-- Thanks to 8bitbubsy for helping to debug ProTracker sample rates.
+* Thanks to **echolevel** for Open Amiga Sampler
+* Thanks to **8bitbubsy** for help debugging ProTracker timing
 
 ## License
 
 MIT
+
