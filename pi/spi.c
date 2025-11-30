@@ -38,8 +38,6 @@ static void *spi_thread(void *arg)
     ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &bits);
     ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &speed);
 
-    fprintf(stderr, "[SPI] thread started (efficient mode)\n");
-
     #define BURST_SIZE 32  // Small bursts for low latency
     uint8_t burst_buf[BURST_SIZE];
     

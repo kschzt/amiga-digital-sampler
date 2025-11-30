@@ -13,23 +13,45 @@ The result is a modern, clean, high-quality digital sampler that plugs directly 
 
 ## Status
 
-**1.2 – New DSP engine with selectable shaping, filtering, compression, saturation, and dither**
+1.3 – New DSP engine, real-time UI, presets, shaping, filtering, compression, saturation, and dither
+
+![](ui.png)
+
+The sampler has a terminal UI with:
+- real-time VU / peak meters
+- clip detection
+- DSP load meter
+- quantizer noise meter
+- DC offset monitor
+- runtime DSP toggles
+- eight presets
 
 The sampler supports multiple DSP modes suitable for different content types:
 
 - **Raw / punchy**: filter off, shaping off  
 - **Clean / pads**: shaping on (auto-filter on)
 - **Bright transients / snares**: filter off, shaping off
-- **Lo-fi / crunchy**: shaping on, filter off (intentional aliasing)  
+- **Lo-fi / crunchy**: shaping on, filter off (intentional aliasing)
 
 ## Motivation
 
-Traditional analog Amiga parallel-port samplers are noisy, have DC offsets, and dynamics issues.
+Traditional analog Amiga parallel-port samplers are noisy, have DC offsets, and dynamics issues.  
 Rather than fight the hardware, this project implements a **fully digital** sampler:
 
 S/PDIF → Raspberry Pi → DSP → Pico → Amiga DB25
 
 No noise, no DC offsets, and precise sample rate control.
+
+### UI Display
+
+The UI includes:
+
+* **VU meter** (grey → green → yellow → red)
+* **Peak meter**
+* **Clip indicator & event counter**
+* **DSP load** (real-time load)
+* **Quantizer noise (oversampled quantizer error energy)**
+* **DC offset**
 
 ## Hardware
 
@@ -84,28 +106,44 @@ VCC → 5V, GND → GND
 ```bash
 cd pi
 make
-./sampler            # default raw mode
-./sampler --shape    # shaped, filtered, clean mode
-./sampler --filter   # enable LPF
-./sampler --shape --no-filter # shape, but disable LPF
-./sampler --compress --saturate
-./sampler --test-tone --tone-freq 440
+./sampler
 ````
 
-### DSP Options
+Use the keyboard to enable DSP sections or change presets (1-8).
+
+### Runtime Controls (Keyboard)
+
+**Presets (1–8):**
+
+* Raw
+* Raw + Saturation
+* Filter Only
+* Shaper
+* Shaper + Dither
+* Dirty LoFi
+* Comp + Sat
+* Clean + Compressor
+
+**DSP Toggles:**
 
 ```
---filter       Enable 14kHz anti-alias LPF (pre + post)
---shape        Enable 2nd/3rd-order noise shaping
-                (auto-enables filter unless explicitly disabled with --no-filter)
---dither       Enable HP-TPDF dither in oversample quantizer
---compress     Gentle envelope-based compression
---saturate     Soft saturation
+f  = toggle filter
+s  = toggle shaper
+d  = toggle dither
+c  = toggle compressor
+t  = toggle saturator
+x  = reset peak + clip counters
+q  = quit
+```
+
+### Command-line Options
+
+```
 --gain X       Input gain (default 1.0)
 --rate Hz      Target sample rate (default 28149.96)
 --test-tone    Generate sine wave
---tone-freq    Frequency of sine (default 1000 Hz)
---test-ramp    Generate 0..255 ramp
+--tone-freq Hz Frequency of sine (default 1000 Hz)
+--test-ramp    Generate test ramp
 ```
 
 ### Pico
@@ -123,7 +161,7 @@ make
 1. Set sampling note to **A-3**
 2. After sampling, set **Finetune +1** for exact pitch
 
-This matches the Amiga's 28149.96 kHz sampling mode for PT A-3.
+This matches the Amiga's 28149.96 Hz sampling mode for PT A-3.
 
 ## Technical Details
 
@@ -134,22 +172,22 @@ This matches the Amiga's 28149.96 kHz sampling mode for PT A-3.
 ↓
 DC-block (always)
 ↓
-Pre-FIR LPF (optional: --filter)
+Pre-FIR LPF (optional: filter)
 ↓
-Compressor (optional: --compress)
+Compressor (optional)
 ↓
-Saturator (optional: --saturate)
+Saturator (optional)
 ↓
 Oversample quantizer at 48kHz (always)
-  • shaping (optional: --shape)
-  • HP-TPDF dither (optional: --dither)
+  • 3rd-order shaping (optional)
+  • HP-TPDF dither (optional)
 ↓
-Post-FIR LPF (optional: --filter)
+Post-FIR LPF (optional: filter)
 ↓
 Decimation to ~28.15kHz (always)
 ↓
 Final 8-bit quantizer (always)
-  • gentle shaping (optional: --shape)
+  • 2nd-order shaping (optional)
 ↓
 SPI burst output → Pico
 ↓
@@ -158,22 +196,24 @@ PIO-driven parallel bus → Amiga
 
 ### Notes on DSP Behavior
 
-* **Oversampling is always active internally**, ensuring stable decimation
-* **Shaping automatically enables filtering** unless you explicitly use `--no-filter`
+* **Oversampling is always active**, ensuring stable, artifact-free decimation
+* **Shaping automatically enables filtering** when enabled via preset
 * Disabling filters is ideal for snares/kicks
 * Enabling shaping + filtering is ideal for pads/melodic sounds
-* Shaping without filtering produces aliasing (lo-fi mode)
+* Shaping without filtering produces aliasing (intentional LoFi mode)
+* Toggle DSP sections on/off in UI and monitor DSP state
 
 ### Timing
 
 * Amiga STROBE ≈ **28149.96 Hz**
-* Pico latches the next sample exactly on each STROBE edge
+* Pico latches the sample exactly on each STROBE edge
 * Pi → Pico SPI transfer uses small bursts to minimize latency
 * 8KB ringbuffer smooths jitter
 
 ## Warning
 
-Be careful, don't break your Amiga! Check wiring twice. Ensure common ground. Only drive DB25 **D0–D7** pins — nothing else.
+Be careful, don't break your Amiga! Check wiring twice. Ensure common ground.
+Only drive DB25 **D0–D7** pins — nothing else.
 
 ## Acknowledgements
 
