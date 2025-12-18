@@ -9,7 +9,7 @@ This project provides fully **digital** audio sampling for the Amiga using:
 - Raspberry Pi Pico for cycle-accurate parallel output
 - Amiga sampling software (e.g., ProTracker)
 
-The result is a modern, clean, high-quality digital sampler that plugs directly into the Amiga’s parallel port.
+The result is a modern, clean, high-quality digital sampler that plugs directly into the Amiga's parallel port.
 
 ## Status
 
@@ -28,14 +28,14 @@ The sampler has a terminal UI with:
 
 The sampler supports multiple DSP modes suitable for different content types:
 
-- **Raw / punchy**: filter off, shaping off  
+- **Raw / punchy**: filter off, shaping off
 - **Clean / pads**: shaping on (auto-filter on)
 - **Bright transients / snares**: filter off, shaping off
 - **Lo-fi / crunchy**: shaping on, filter off (intentional aliasing)
 
 ## Motivation
 
-Traditional analog Amiga parallel-port samplers are noisy, have DC offsets, and dynamics issues.  
+Traditional analog Amiga parallel-port samplers are noisy, have DC offsets, and dynamics issues.
 Rather than fight the hardware, this project implements a **fully digital** sampler:
 
 S/PDIF → Raspberry Pi → DSP → Pico → Amiga DB25
@@ -57,15 +57,15 @@ The UI includes:
 
 ### Required Components
 
-- Raspberry Pi 3A+ or 4  
-- HiFiBerry Digi+ I/O  
-- Raspberry Pi Pico  
-- 74HCT245 octal buffer  
-- 74LVX14 Schmitt trigger inverter  
-- DB25 male connector  
-- 0.1µF ceramic capacitors (3×)  
+- Raspberry Pi 3A+ or 4
+- HiFiBerry Digi+ I/O
+- Raspberry Pi Pico
+- 74HCT245 octal buffer
+- 74LVX14 Schmitt trigger inverter
+- DB25 male connector
+- 0.1µF ceramic capacitors (3×)
   - Rails
-  - 74HCT245 decoupling  
+  - 74HCT245 decoupling
   - 74LVX14 decoupling
 
 ### Connections
@@ -86,6 +86,12 @@ Pin 14 → 3.3V
 Pin 7  → GND
 0.1µF across VCC/GND
 ```
+
+#### Sampling Activity (Pico → Pi)
+```
+Pico GP20  →  Pi GPIO 5
+```
+The Pico drives this pin HIGH while actively receiving STROBE pulses from the Amiga, LOW when idle. The Pi monitors this to run hook scripts (`sampler_active.sh` / `sampler_inactive.sh`) for automation (e.g., muting DAW returns to prevent feedback).
 
 #### Data Buffer (Pico → Amiga via 74HCT245)
 ```
@@ -223,4 +229,3 @@ Only drive DB25 **D0–D7** pins — nothing else.
 ## License
 
 MIT
-

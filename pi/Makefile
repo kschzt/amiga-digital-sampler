@@ -1,8 +1,9 @@
 CC=gcc
+CC=gcc
 CFLAGS=-O3 -march=native -Wall
-LIBS=-lasound -lm -lpthread
+LIBS=-lasound -lm -lpthread -lgpiod
 
-OBJS = main.o dsp.o audio.o spi.o ringbuf.o presets.o ui.o
+OBJS = main.o dsp.o audio.o spi.o ringbuf.o presets.o ui.o gpio_monitor.o
 
 sampler: $(OBJS)
 	$(CC) $(CFLAGS) -o sampler $(OBJS) $(LIBS)

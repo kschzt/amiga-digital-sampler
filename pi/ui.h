@@ -28,6 +28,9 @@ typedef struct {
     int preset_index;           // 0-based
     int preset_count;
 
+    // Sampler activity (set by GPIO monitor thread)
+    bool sampler_active;        // true when Pico asserts activity pin
+
     // Internal timing for UI refresh
     uint64_t last_ui_update_ms;
 } ui_state_t;
