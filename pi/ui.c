@@ -181,7 +181,7 @@ void ui_draw(const ui_state_t *us) {
 "Keys: 1–8 presets  •  d s f c t x  •  q=quit\n",
 
         preset_buf,
-        us->sampler_active ? "\033[32mACTIVE\033[0m" : "\033[90midle\033[0m",
+        us->sampler_active ? "\033[32mACTIVE\033[0m" : "\033[90midle  \033[0m",
 
         us->cfg->filter ? ON : OFF,  vu_str, vu_db, "",
         us->cfg->shape  ? ON : OFF,  pk_str, pk_db, "",
