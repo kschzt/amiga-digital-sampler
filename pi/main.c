@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include "dsp.h"
 #include "audio.h"
@@ -11,6 +12,7 @@
 #include "ringbuf.h"
 #include "ui.h"
 #include "presets.h"
+#include "gpio_monitor.h"
 
 // Globals required everywhere
 ui_state_t ui;
@@ -32,6 +34,8 @@ static void usage() {
 
 int main(int argc, char **argv)
 {
+    signal(SIGCHLD, SIG_IGN);  // Auto-reap script children
+
     dsp_config_t cfg = {
         .filter=false, .shape=false, .dither=false,
         .compress=false, .saturate=false,
@@ -82,12 +86,16 @@ int main(int argc, char **argv)
     audio_args_t aa = { .rb=&rb, .cfg=cfg, .test=tm };
     spi_args_t   sa = { .rb=&rb, .target_rate=cfg.target_rate };
 
-    pthread_t th_audio, th_spi, th_ui;
+    pthread_t th_audio, th_spi, th_ui, th_gpio;
 
     ui_init(&ui);
     ui_thread_create(&th_ui,&ui);
     audio_thread_create(&th_audio,&aa);
     spi_thread_create(&th_spi,&sa);
+
+    // GPIO activity monitor
+    static gpio_monitor_args_t ga = { .gpio_pin = 5 };
+    gpio_monitor_thread_create(&th_gpio, &ga);
 
     for(;;) pause();
     return 0;

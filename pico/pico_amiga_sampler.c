@@ -11,6 +11,7 @@
 #define STROBE_PIN 10
 #define DATA_BASE  2
 #define OE_PIN     11
+#define ACTIVITY_PIN 20  // Signal to Pi: HIGH = sampling active
 
 #define PIN_MOSI 16
 #define PIN_CS   17
@@ -20,6 +21,9 @@
 #define RING_BITS 13  // 8KB
 #define RING_SIZE (1 << RING_BITS)
 #define RING_MASK (RING_SIZE - 1)
+
+// Activity timeout in microseconds (3ms = ~87 strobes at 29kHz)
+#define ACTIVITY_TIMEOUT_US 3000
 
 static uint8_t spi_ring[RING_SIZE] __attribute__((aligned(RING_SIZE)));
 static volatile uint32_t read_ptr = 0;
@@ -33,11 +37,22 @@ static uint spi_sm;
 static volatile uint64_t strobe_count = 0;
 static volatile uint64_t underruns = 0;
 
+// Activity tracking
+static volatile uint64_t last_strobe_time_us = 0;
+static volatile bool activity_pin_state = false;
+
 // ------------------------------
 // STROBE IRQ - reads directly from DMA ring buffer
 // ------------------------------
 void strobe_irq(uint gpio, uint32_t events) {
     if (gpio == STROBE_PIN && (events & GPIO_IRQ_EDGE_FALL)) {
+        // Record strobe time and set activity HIGH
+        last_strobe_time_us = time_us_64();
+        if (!activity_pin_state) {
+            gpio_put(ACTIVITY_PIN, 1);
+            activity_pin_state = true;
+        }
+
         // Get DMA's current write position
         uint32_t write_ptr = ((uint32_t)dma_channel_hw_addr(dma_chan)->write_addr
                              - (uint32_t)spi_ring) & RING_MASK;
@@ -71,6 +86,11 @@ int main() {
     for (int i = 0; i < RING_SIZE; i++) {
         spi_ring[i] = 0x80;
     }
+
+    // Activity pin setup (signal to Pi)
+    gpio_init(ACTIVITY_PIN);
+    gpio_set_dir(ACTIVITY_PIN, GPIO_OUT);
+    gpio_put(ACTIVITY_PIN, 0);
 
     // 245 OE high (disabled)
     gpio_init(OE_PIN);
@@ -149,13 +169,22 @@ int main() {
     printf("Running... (ring buffer version)\n\n");
 
     // ------------------------------
-    // MAIN LOOP - Just stats, nothing timing-critical
+    // MAIN LOOP - Stats + activity timeout
     // ------------------------------
     absolute_time_t last_status = get_absolute_time();
 
     while (1) {
         sleep_ms(100);
 
+        uint64_t now_us = time_us_64();
+
+        // Check activity timeout
+        if (activity_pin_state && (now_us - last_strobe_time_us) > ACTIVITY_TIMEOUT_US) {
+            gpio_put(ACTIVITY_PIN, 0);
+            activity_pin_state = false;
+        }
+
+        // Periodic stats (every 1 second)
         absolute_time_t now = get_absolute_time();
         uint64_t elapsed = absolute_time_diff_us(last_status, now);
 
@@ -167,8 +196,8 @@ int main() {
 
             float strobe_rate = (float)strobe_count * 1000000.0f / elapsed;
 
-            printf("Ring: %lu/%d, STROBE: %.1f Hz, Under: %llu\n",
-                   fill, RING_SIZE, strobe_rate, underruns);
+            printf("Ring: %lu/%d, STROBE: %.1f Hz, Under: %llu, Active: %d\n",
+                   fill, RING_SIZE, strobe_rate, underruns, activity_pin_state);
 
             strobe_count = 0;
             underruns = 0;
