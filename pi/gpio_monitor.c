@@ -53,30 +53,41 @@ static void *gpio_monitor_thread(void *arg) {
 
     struct gpiod_edge_event_buffer *event_buffer = gpiod_edge_event_buffer_new(1);
 
+    // Initialize activity flag from current level if requested
+    if (args && args->active_target) {
+        int v = gpiod_line_request_get_value(request, offset);
+        if (v >= 0) *args->active_target = (v != 0);
+    }
+
     while (1) {
-        int ret = gpiod_line_request_wait_edge_events(request, 1000000000LL); // 1 sec
+        int ret = gpiod_line_request_wait_edge_events(request, 200000000LL); // 200 ms
         if (ret < 0) {
             perror("gpio_monitor: wait_edge_events");
             break;
         }
-        if (ret == 0) {
-            while (waitpid(-1, NULL, WNOHANG) > 0);
-            continue;
+        if (ret > 0) {
+            int num = gpiod_line_request_read_edge_events(request, event_buffer, 1);
+            if (num < 0) {
+                perror("gpio_monitor: read_edge_events");
+                break;
+            }
+
+            struct gpiod_edge_event *event = gpiod_edge_event_buffer_get_event(event_buffer, 0);
+            enum gpiod_edge_event_type type = gpiod_edge_event_get_event_type(event);
+
+            if (type == GPIOD_EDGE_EVENT_RISING_EDGE) {
+                if (args && args->active_target) *args->active_target = true;
+                run_script(SCRIPT_ACTIVE);
+            } else if (type == GPIOD_EDGE_EVENT_FALLING_EDGE) {
+                if (args && args->active_target) *args->active_target = false;
+                run_script(SCRIPT_INACTIVE);
+            }
         }
 
-        int num = gpiod_line_request_read_edge_events(request, event_buffer, 1);
-        if (num < 0) {
-            perror("gpio_monitor: read_edge_events");
-            break;
-        }
-
-        struct gpiod_edge_event *event = gpiod_edge_event_buffer_get_event(event_buffer, 0);
-        enum gpiod_edge_event_type type = gpiod_edge_event_get_event_type(event);
-
-        if (type == GPIOD_EDGE_EVENT_RISING_EDGE) {
-            run_script(SCRIPT_ACTIVE);
-        } else if (type == GPIOD_EDGE_EVENT_FALLING_EDGE) {
-            run_script(SCRIPT_INACTIVE);
+        // Periodic sync in case we missed edges
+        if (args && args->active_target) {
+            int v = gpiod_line_request_get_value(request, offset);
+            if (v >= 0) *args->active_target = (v != 0);
         }
 
         while (waitpid(-1, NULL, WNOHANG) > 0);
