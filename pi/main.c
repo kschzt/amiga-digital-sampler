@@ -94,7 +94,7 @@ int main(int argc, char **argv)
     spi_thread_create(&th_spi,&sa);
 
     // GPIO activity monitor
-    static gpio_monitor_args_t ga = { .gpio_pin = 5 };
+    static gpio_monitor_args_t ga = { .gpio_pin = 5, .active_target = &ui.sampler_active };
     gpio_monitor_thread_create(&th_gpio, &ga);
 
     for(;;) pause();

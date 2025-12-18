@@ -2,9 +2,11 @@
 #define GPIO_MONITOR_H
 
 #include <pthread.h>
+#include <stdbool.h>
 
 typedef struct {
-    int gpio_pin;  // GPIO pin to monitor (BCM numbering)
+    int gpio_pin;           // GPIO pin to monitor (BCM numbering)
+    bool *active_target;    // Optional: set to true/false on edges
 } gpio_monitor_args_t;
 
 // Create and start GPIO monitor thread

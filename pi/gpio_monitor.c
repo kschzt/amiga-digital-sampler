@@ -43,6 +43,12 @@ static void *gpio_monitor_thread(void *arg) {
         return NULL;
     }
 
+    // Initialize target state to the current line value if provided
+    if (args->active_target) {
+        int v = gpiod_line_get_value(line);
+        if (v >= 0) *args->active_target = (v != 0);
+    }
+
     struct timespec timeout = { .tv_sec = 1, .tv_nsec = 0 };
     struct gpiod_line_event event;
 
@@ -64,8 +70,10 @@ static void *gpio_monitor_thread(void *arg) {
         }
 
         if (event.event_type == GPIOD_LINE_EVENT_RISING_EDGE) {
+            if (args->active_target) *args->active_target = true;
             run_script(SCRIPT_ACTIVE);
         } else if (event.event_type == GPIOD_LINE_EVENT_FALLING_EDGE) {
+            if (args->active_target) *args->active_target = false;
             run_script(SCRIPT_INACTIVE);
         }
 

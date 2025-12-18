@@ -64,6 +64,7 @@ void ui_init(ui_state_t *us) {
     us->quant_noise = 0;
     us->dc_offset = 0;
     us->dsp_load = 0;
+    us->sampler_active = false;
 
     term_raw_mode();
 
@@ -163,7 +164,7 @@ void ui_draw(const ui_state_t *us) {
     pad_string(preset_buf, us->preset_name, 24);
 
     printf(
-"Preset:  \033[36m%s\033[0m\n\n"
+"Preset:  \033[36m%s\033[0m    Sampler: %s\n\n"
 
 "DSP Status:                               Levels:\n"
 "  Filter:     %s                 VU:   [%-30s]   %6.1f dBFS%20s\n"
@@ -180,6 +181,7 @@ void ui_draw(const ui_state_t *us) {
 "Keys: 1–8 presets  •  d s f c t x  •  q=quit\n",
 
         preset_buf,
+        us->sampler_active ? "\033[32mACTIVE\033[0m" : "\033[90midle\033[0m",
 
         us->cfg->filter ? ON : OFF,  vu_str, vu_db, "",
         us->cfg->shape  ? ON : OFF,  pk_str, pk_db, "",
