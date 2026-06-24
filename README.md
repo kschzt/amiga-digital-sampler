@@ -130,7 +130,7 @@ Enable the HiFiBerry Digi+ I/O HAT. Edit the boot config
 
 ```ini
 dtparam=audio=off
-dtoverlay=hifiberry-digi-pro
+dtoverlay=hifiberry-digi
 ```
 
 Make sure no `dtparam=audio=on` line is still active, or the onboard
