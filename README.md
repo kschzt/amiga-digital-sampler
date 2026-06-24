@@ -109,6 +109,44 @@ VCC → 5V, GND → GND
 
 ### Raspberry Pi
 
+#### System Setup (first time only)
+
+Install build dependencies:
+
+```bash
+sudo apt update
+sudo apt install build-essential libasound2-dev libgpiod-dev
+```
+
+Enable SPI (Pi → Pico link):
+
+```bash
+sudo raspi-config nonint do_spi 0   # 0 = enable
+```
+
+Enable the HiFiBerry Digi+ I/O HAT. Edit the boot config
+(`/boot/firmware/config.txt` on current Pi OS; older releases use
+`/boot/config.txt`):
+
+```ini
+dtparam=audio=off
+dtoverlay=hifiberry-digi-pro
+```
+
+Make sure no `dtparam=audio=on` line is still active, or the onboard
+audio will take card 0. Reboot, then verify both interfaces:
+
+```bash
+ls /dev/spidev*      # expect /dev/spidev0.0
+arecord -l           # expect the hifiberry digi capture card
+```
+
+The code opens the capture device as `hw:0,0` (see `ALSA_DEVICE` in
+`audio.c`). If `arecord -l` shows the card at a different number, update
+that constant to match (e.g. `hw:1,0`).
+
+#### Build & Run
+
 ```bash
 cd pi
 make

@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 extern ui_state_t ui;
@@ -50,7 +51,14 @@ static void *audio_thread(void *arg)
 
     // open ALSA if not test mode
     if (!tm->test_tone && !tm->test_ramp) {
-        snd_pcm_open(&pcm, ALSA_DEVICE, SND_PCM_STREAM_CAPTURE, 0);
+        int err = snd_pcm_open(&pcm, ALSA_DEVICE, SND_PCM_STREAM_CAPTURE, 0);
+        if (err < 0 || !pcm) {
+            fprintf(stderr,
+                "Cannot open ALSA capture device %s: %s\n"
+                "Is the HiFiBerry Digi+ I/O HAT enabled? Check `arecord -l`.\n",
+                ALSA_DEVICE, snd_strerror(err));
+            exit(1);
+        }
 
         snd_pcm_hw_params_t *p;
         snd_pcm_hw_params_alloca(&p);
