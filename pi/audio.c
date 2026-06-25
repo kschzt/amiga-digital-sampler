@@ -76,7 +76,7 @@ static void *audio_thread(void *arg)
         snd_pcm_uframes_t period = ALSA_FRAMES;
         snd_pcm_uframes_t buffer = ALSA_FRAMES * 32;   // ~170 ms of headroom
         snd_pcm_hw_params_set_period_size_near(pcm, p, &period, 0);
-        snd_pcm_hw_params_set_buffer_size_near(pcm, p, &buffer, 0);
+        snd_pcm_hw_params_set_buffer_size_near(pcm, p, &buffer);
 
         int perr = snd_pcm_hw_params(pcm, p);
         if (perr < 0)
