@@ -4,6 +4,7 @@
 #include "presets.h"
 
 #include <pthread.h>
+#include <sched.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,8 +69,31 @@ static void *audio_thread(void *arg)
         snd_pcm_hw_params_set_channels(pcm, p, ALSA_CH);
         snd_pcm_hw_params_set_rate(pcm, p, ALSA_RATE, 0);
 
-        snd_pcm_hw_params(pcm, p);
+        // Explicitly size the capture buffer. Left to driver defaults this
+        // can be small enough that a brief scheduling stall overruns once per
+        // buffer-fill (~hundreds of ms) -> a steady audible click. A generous
+        // buffer gives the DSP loop slack to catch up after any hiccup.
+        snd_pcm_uframes_t period = ALSA_FRAMES;
+        snd_pcm_uframes_t buffer = ALSA_FRAMES * 32;   // ~170 ms of headroom
+        snd_pcm_hw_params_set_period_size_near(pcm, p, &period, 0);
+        snd_pcm_hw_params_set_buffer_size_near(pcm, p, &buffer, 0);
+
+        int perr = snd_pcm_hw_params(pcm, p);
+        if (perr < 0)
+            fprintf(stderr, "ALSA hw_params: %s\n", snd_strerror(perr));
         snd_pcm_prepare(pcm);
+    }
+
+    // Run the capture/DSP thread at real-time priority so the kernel can't
+    // preempt it mid-block. A stall here means the capture buffer overruns,
+    // which is exactly the periodic click we're chasing. Needs CAP_SYS_NICE
+    // (run as root or grant rtprio); degrades gracefully if unavailable.
+    if (!tm->test_tone && !tm->test_ramp) {
+        struct sched_param sp = { .sched_priority = 50 };
+        if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sp) != 0)
+            fprintf(stderr,
+                "Note: could not set real-time priority; run with enough "
+                "privileges (root / rtprio) to avoid capture xruns.\n");
     }
 
     float phase = 0.0f;
@@ -159,7 +183,11 @@ static void *audio_thread(void *arg)
         {
             int frames = snd_pcm_readi(pcm, alsa_buf, ALSA_FRAMES);
             if (frames < 0) {
-                snd_pcm_prepare(pcm);
+                // Overrun (or other recoverable error): count it so it's
+                // visible in the UI, recover, and keep going. Each overrun is
+                // a dropped chunk == one audible click.
+                ui.xruns++;
+                snd_pcm_recover(pcm, frames, 1);
                 continue;
             }
 

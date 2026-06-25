@@ -23,6 +23,7 @@ typedef struct {
     float quant_noise;          // Smoothed quantizer error magnitude
     float dc_offset;            // Smoothed DC offset
     float dsp_load;             // Realtime audio thread load %
+    uint64_t xruns;             // ALSA capture overruns (audio thread fell behind)
 
     const char *preset_name;    // UI-visible name
     int preset_index;           // 0-based

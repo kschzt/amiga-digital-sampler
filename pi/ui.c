@@ -64,6 +64,7 @@ void ui_init(ui_state_t *us) {
     us->quant_noise = 0;
     us->dc_offset = 0;
     us->dsp_load = 0;
+    us->xruns = 0;
     us->sampler_active = false;
 
     term_raw_mode();
@@ -176,7 +177,8 @@ void ui_draw(const ui_state_t *us) {
 "Stats:\n"
 "  DSP Load:            %4.1f%%\n"
 "  Quantizer Noise:     %6.1f dBFS\n"
-"  DC Offset:           %+0.4f\n\n"
+"  DC Offset:           %+0.4f\n"
+"  Capture xruns:       %s%llu\033[0m\n\n"
 
 "Keys: 1–8 presets  •  d s f c t x  •  q=quit\n",
 
@@ -195,7 +197,9 @@ void ui_draw(const ui_state_t *us) {
 
         us->dsp_load * 100.0f,
         noise_db,
-        us->dc_offset
+        us->dc_offset,
+        us->xruns ? "\033[31m" : "",
+        (unsigned long long)us->xruns
     );
 
     fflush(stdout);
